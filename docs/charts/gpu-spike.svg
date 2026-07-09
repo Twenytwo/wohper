@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="760" height="300" fill="#ffffff"/>
+  <text x="380" y="28" text-anchor="middle" font-size="17" font-weight="600" fill="#1F1E1D">FP8 GEMV spike - largest attention matrix (7168 × 8192)</text>
+  <text x="380" y="46" text-anchor="middle" font-size="12" fill="#6E6B64">milliseconds per GEMV, log scale · RTX 2070 Super Max-Q vs one i7-10750H core · max rel. error 8.8e-4</text>
+  <!-- log scale: 0.1ms..100ms over x 180..700; x = 180 + log10(v/0.1) * 173.3 -->
+  <line x1="180" y1="220" x2="700" y2="220" stroke="#B8B4AA" stroke-width="1"/>
+  <g stroke="#EDEAE2" stroke-width="1">
+    <line x1="180" y1="70" x2="180" y2="220"/>
+    <line x1="353" y1="70" x2="353" y2="220"/>
+    <line x1="526" y1="70" x2="526" y2="220"/>
+    <line x1="700" y1="70" x2="700" y2="220"/>
+  </g>
+  <g font-size="11" fill="#6E6B64" text-anchor="middle">
+    <text x="180" y="238">0.1 ms</text>
+    <text x="353" y="238">1 ms</text>
+    <text x="526" y="238">10 ms</text>
+    <text x="700" y="238">100 ms</text>
+  </g>
+  <!-- CPU scalar 54.9ms -> x = 180 + log10(549)*173.3 = 180 + 2.7396*173.3 = 654.8 -->
+  <rect x="180" y="85" width="474.8" height="40" fill="#8f9fb8"/>
+  <text x="662" y="110" font-size="13" font-weight="600" fill="#1F1E1D">54.9 ms</text>
+  <text x="188" y="110" font-size="12" fill="#ffffff">CPU, scalar reference (1 core)</text>
+  <!-- GPU 0.83ms -> x = 180 + log10(8.3)*173.3 = 180 + 0.919*173.3 = 339.3 -->
+  <rect x="180" y="150" width="159.3" height="40" fill="#D97757"/>
+  <text x="347" y="175" font-size="13" font-weight="600" fill="#1F1E1D">0.83 ms - 66x</text>
+  <text x="188" y="175" font-size="12" fill="#ffffff">GPU (CUDA)</text>
+  <text x="380" y="272" text-anchor="middle" font-size="11" fill="#6E6B64">All attention projection weights (~5.9 GB FP8) fit in the 8 GB of VRAM - full GPU attention is the roadmap's next step.</text>
+</svg>

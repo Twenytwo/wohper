@@ -1,0 +1,35 @@
+{
+  "format": "zeroclaw-quality-prompts",
+  "version": 1,
+  "max_new_tokens_default": 1,
+  "prompts": [
+    {
+      "id": "it_greeting",
+      "messages": [
+        {"role": "system", "content": "Rispondi in italiano, breve."},
+        {"role": "user", "content": "Ciao, chi sei?"}
+      ]
+    },
+    {
+      "id": "it_math_small",
+      "messages": [
+        {"role": "system", "content": "Rispondi solo con il risultato."},
+        {"role": "user", "content": "Quanto fa 2+3?"}
+      ]
+    },
+    {
+      "id": "it_instruction",
+      "messages": [
+        {"role": "system", "content": "Segui l'istruzione dell'utente."},
+        {"role": "user", "content": "Scrivi una parola positiva."}
+      ]
+    },
+    {
+      "id": "unicode_smoke",
+      "messages": [
+        {"role": "system", "content": "Rispondi in modo conciso."},
+        {"role": "user", "content": "Ripeti il senso di: caffe, citta, energia."}
+      ]
+    }
+  ]
+}

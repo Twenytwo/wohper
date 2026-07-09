@@ -1,0 +1,30 @@
+FROM rust:1-bookworm
+
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    clang \
+    fio \
+    liburing-dev \
+    linux-libc-dev \
+    lld \
+    llvm \
+    pkg-config \
+    python3 \
+    sysstat \
+    util-linux \
+  && ln -sf /usr/local/cargo/bin/cargo /usr/local/bin/cargo \
+  && ln -sf /usr/local/cargo/bin/rustc /usr/local/bin/rustc \
+  && ln -sf /usr/local/cargo/bin/rustfmt /usr/local/bin/rustfmt \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Build from repository root:
+#   docker build -f engine/zc_infer_core/Dockerfile.dev -t zc-infer-dev .
+#   docker run --rm -it --ulimit memlock=-1:-1 --cap-add IPC_LOCK \
+#     -v "$PWD:/workspace" zc-infer-dev bash
+
+CMD ["bash"]

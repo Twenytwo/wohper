@@ -1,0 +1,40 @@
+{
+  "format": "deepseek-v4-quality-prompts",
+  "version": 1,
+  "prompts": [
+    {
+      "id": "it_greeting",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Rispondi in italiano, in modo breve."
+        },
+        {
+          "role": "user",
+          "content": "Ciao, dimmi solo che sei pronto."
+        }
+      ],
+      "max_new_tokens": 8
+    },
+    {
+      "id": "it_math_small",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Quanto fa 2+2? Rispondi solo con il numero."
+        }
+      ],
+      "max_new_tokens": 4
+    },
+    {
+      "id": "unicode_smoke",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Ripeti queste parole: citta, caffe, euro."
+        }
+      ],
+      "max_new_tokens": 12
+    }
+  ]
+}

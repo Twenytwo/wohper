@@ -1,0 +1,41 @@
+{
+  "format": "zeroclaw-quality-prompts",
+  "version": 2,
+  "max_new_tokens_default": 1,
+  "default_limit": 2,
+  "policy": "small_repeatable_prompts_only",
+  "prompts": [
+    {
+      "id": "it_greeting",
+      "category": "basic_chat",
+      "purpose": "First-token sanity for an Italian greeting.",
+      "system": "Rispondi in italiano, in modo breve.",
+      "user": "Ciao, come stai?",
+      "max_new_tokens": 1
+    },
+    {
+      "id": "it_math_small",
+      "category": "basic_reasoning",
+      "purpose": "First-token sanity for a tiny arithmetic prompt.",
+      "system": "Rispondi solo con il risultato.",
+      "user": "Quanto fa 2+2?",
+      "max_new_tokens": 1
+    },
+    {
+      "id": "unicode_smoke",
+      "category": "unicode",
+      "purpose": "Tokenizer/template Unicode stability.",
+      "system": "Rispondi in italiano.",
+      "user": "Ripeti una parola con accento: città.",
+      "max_new_tokens": 1
+    },
+    {
+      "id": "stop_short",
+      "category": "stop_behavior",
+      "purpose": "Short prompt for stop-token and one-token smoke.",
+      "system": "Rispondi con una sola parola.",
+      "user": "Dimmi ok.",
+      "max_new_tokens": 1
+    }
+  ]
+}

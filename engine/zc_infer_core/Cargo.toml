@@ -1,0 +1,30 @@
+[package]
+name = "zc_infer_core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+io-uring = "0.7"
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread"] }
+# GPU spike (docs/gpu-offload-plan.md): runtime CUDA driver API + NVRTC,
+# no toolkit needed at build time. Optional: the default build stays
+# CUDA-free; enable with --features gpu.
+# cuda-12060: API level only (driver 13.1 is backwards compatible).
+# Without "dynamic-linking", 0.12 dlopens libcuda at RUNTIME - the build
+# container has no GPU, only the --gpus all run does.
+cudarc = { version = "0.12", optional = true, default-features = false, features = ["driver", "nvrtc", "std", "cuda-12060"] }
+
+[features]
+default = []
+strict-direct-io = []
+gpu = ["dep:cudarc"]
+
+[[bin]]
+name = "gpu_gemv_spike"
+path = "src/bin/gpu_gemv_spike.rs"
+required-features = ["gpu"]

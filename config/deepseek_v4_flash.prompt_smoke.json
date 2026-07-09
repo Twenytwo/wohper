@@ -1,0 +1,12 @@
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "Rispondi in italiano, in modo breve."
+    },
+    {
+      "role": "user",
+      "content": "Ciao, dimmi solo che sei pronto."
+    }
+  ]
+}

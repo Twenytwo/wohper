@@ -1,0 +1,38 @@
+{
+  "format": "zeroclaw-tokenizer-contract",
+  "version": 1,
+  "model_family": "deepseek_v4_flash",
+  "hf_repo": "deepseek-ai/DeepSeek-V4-Flash",
+  "policy": {
+    "allow_generic_chatml_fallback": false,
+    "allow_jinja_as_source_of_truth": false,
+    "requires_encoding_directory": true,
+    "requires_model_specific_renderer": true,
+    "unicode_smoke_required": true,
+    "streaming_decode_required": true
+  },
+  "required_paths": [
+    "encoding",
+    "config.json",
+    "generation_config.json"
+  ],
+  "smoke_prompts": [
+    {
+      "id": "it_greeting",
+      "text": "Ciao, rispondi in una frase breve."
+    },
+    {
+      "id": "unicode",
+      "text": "Scrivi: citta, caffe, euro, alfa beta."
+    },
+    {
+      "id": "stop_short",
+      "text": "Rispondi solo con OK."
+    }
+  ],
+  "blocked_until": [
+    "metadata-only sync has downloaded encoding files",
+    "dependency-free encoder or trusted isolated tokenizer adapter exists",
+    "official stop token ids are resolved from local metadata"
+  ]
+}

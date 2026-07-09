@@ -1,0 +1,56 @@
+{
+  "format": "zeroclaw-model-family-contract",
+  "version": 1,
+  "model_family": "deepseek_v4_flash",
+  "hf_repo": "deepseek-ai/DeepSeek-V4-Flash",
+  "source_urls": [
+    "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+    "https://github.com/deepseek-ai/DeepSpec"
+  ],
+  "public_release_role": "bridge_before_glm52_700b",
+  "official_public_facts": {
+    "total_params": 284000000000,
+    "activated_params": 13000000000,
+    "context_length_tokens": 1048576,
+    "precision": "FP4 + FP8 mixed",
+    "license": "mit",
+    "hf_repo_size_gb": 160,
+    "expected_safetensors_shards": 46,
+    "model_type_tag": "deepseek_v4"
+  },
+  "quickstart_policy": {
+    "safe_for_16gb_quickstart": false,
+    "allow_weight_download_by_default": false,
+    "allow_deepspec_training_by_default": false,
+    "min_target_ssd_gb": 1000,
+    "min_free_after_download_gb": 250,
+    "temp_staging_multiplier": 0.1
+  },
+  "required_metadata_paths": [
+    "config.json",
+    "generation_config.json",
+    "LICENSE",
+    "README.md",
+    "encoding",
+    "inference"
+  ],
+  "required_runtime_adapters": [
+    "tokenizer_encoding_adapter",
+    "safetensors_inventory",
+    "converter_dry_run",
+    "fp4_expert_unpack",
+    "fp8_dense_unpack",
+    "moe_router",
+    "expert_dispatch",
+    "csa_hca_attention",
+    "mhc_residual_path",
+    "embed_and_lm_head",
+    "reference_trace"
+  ],
+  "deepspec_policy": {
+    "integration_role": "advanced_speculative_decoding_reference",
+    "runtime_dependency": false,
+    "quickstart_dependency": false,
+    "native_deepseek_v4_flash_support_in_vendored_checkout": false
+  }
+}

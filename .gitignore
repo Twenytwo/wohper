@@ -1,0 +1,70 @@
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.log
+logs/*
+!logs/.gitkeep
+state/*
+!state/.gitkeep
+projects/*
+!projects/.gitkeep
+worktrees/*
+!worktrees/.gitkeep
+.local/*
+!/.local/.gitkeep
+vendor/open-design/
+config/loop.config.json
+__pycache__/
+*.pyc
+
+# Rust
+target/
+**/target/
+Cargo.lock
+*.rlib
+*.rmeta
+
+# Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.pyo
+
+# Model and benchmark artifacts
+*.bin
+*.safetensors
+*.safetensors.index.json
+*.gguf
+*.onnx
+MODEL*.index.json
+projects/*
+!projects/.gitkeep
+test_artifacts/
+
+# Hugging Face and ML caches
+.cache/
+hf_cache/
+huggingface/
+models/
+checkpoints/
+cache/
+*.zcblk
+
+# Local IDE/OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Temporary archives/deploy bundles
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+vendor/deepspec/
