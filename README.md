@@ -397,6 +397,18 @@ curl http://127.0.0.1:8114/v1/chat/completions -d '{
 }'
 ```
 
+Beyond plain chat, the shim does **tool calling**: pass OpenAI `tools`
+in the request and it renders them into DeepSeek's native DSML tool
+format, then parses the model's tool calls back into OpenAI `tool_calls`
+(`finish_reason: "tool_calls"`). Send the tool output back as a
+`{"role": "tool", ...}` message and the multi-step agent loop closes. This
+is what lets the local model *act* (call tools, run an agent), not just
+answer - so agents like [OpenClaw](https://openclaw.ai) can use
+DeepSeek-V4-Flash as a fully local brain. See
+[docs/agent-integration.md](docs/agent-integration.md) for the setup and
+an honest note on speed (great for async/background work, not snappy
+real-time loops).
+
 Any OpenAI-compatible agent client can point at it. Example for opencode
 (`~/.config/opencode/opencode.json`):
 

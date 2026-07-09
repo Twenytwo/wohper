@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
+import sys
 import threading
 import time
 import uuid
@@ -33,13 +35,28 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-TOKENIZER_PATH = REPO / "models" / "deepseek-ai" / "DeepSeek-V4-Flash" / "tokenizer.json"
+MODEL_META_DIR = REPO / "models" / "deepseek-ai" / "DeepSeek-V4-Flash"
+TOKENIZER_PATH = MODEL_META_DIR / "tokenizer.json"
+
+# DeepSeek's own prompt encoder / completion parser ship WITH the model
+# download (models/.../encoding/encoding_dsv4.py). Using it - instead of a
+# hand-rolled template - is what makes tool calling correct: it renders the
+# OpenAI `tools` schema into DeepSeek's DSML block and parses the model's
+# DSML tool calls back into OpenAI `tool_calls`. Pure Python, no deps.
+ENCODING = None
+try:
+    sys.path.insert(0, str(MODEL_META_DIR / "encoding"))
+    import encoding_dsv4 as ENCODING  # type: ignore  # noqa: E402
+except Exception as _encoding_error:  # noqa: BLE001
+    ENCODING = None
+    _ENCODING_IMPORT_ERROR = _encoding_error
 
 BOS = 0
 EOS = 1
 USER = 128803
 ASSISTANT = 128804
 THINK_END = "</think>"
+EOS_TEXT = "<｜end▁of▁sentence｜>"
 
 MODEL_ID = "wohper-deepseek-v4-flash"
 
@@ -54,35 +71,115 @@ TOKENIZER = None
 ENGINE_SOCKET = "/tmp/wohper-chat.sock"
 
 
-def encode_messages(messages: list[dict], think: bool = True) -> list[int]:
-    """Chat template validated against the reference: [BOS] system then
-    <|User|>q<|Assistant|>a<|end|> pairs; trailing <|Assistant|> opens the
-    reply. With think=False an empty think block ("</think>") is pre-filled
-    after the trailing <|Assistant|>, so the model skips the reasoning
-    preamble and answers directly. When the client provides no system
-    message, DEFAULT_SYSTEM is injected (language-adaptive answers)."""
-    if not any(message.get("role") == "system" for message in messages):
-        messages = [{"role": "system", "content": DEFAULT_SYSTEM}] + list(messages)
+def _normalize_content(message: dict) -> dict:
+    """OpenAI content can be a list of parts; flatten to a string."""
+    content = message.get("content")
+    if isinstance(content, list):
+        message = dict(message)
+        message["content"] = "".join(
+            part.get("text", "") for part in content if isinstance(part, dict)
+        )
+    return message
+
+
+def build_prompt_ids(messages: list[dict], tools: list | None, think: bool) -> list[int]:
+    """Encode a conversation (plus optional OpenAI `tools`) into token ids.
+
+    Uses DeepSeek's official encoder when available: it renders the tool
+    schema into the DSML block and places the `</think>` fast-path marker
+    for chat mode. Falls back to the minimal hand-rolled template when the
+    encoding module is not present (plain chat only, no tools)."""
+    messages = [_normalize_content(m) for m in messages]
+    if not any(m.get("role") == "system" for m in messages):
+        messages = [{"role": "system", "content": DEFAULT_SYSTEM}] + messages
+    if tools:
+        # DeepSeek expects tools on the system message.
+        for message in messages:
+            if message.get("role") == "system":
+                message["tools"] = tools
+                break
+    if ENCODING is not None:
+        prompt = ENCODING.encode_messages(
+            messages,
+            thinking_mode="thinking" if think else "chat",
+        )
+        return TOKENIZER.encode(prompt).ids
+    # Fallback: hand-rolled template, plain chat only.
     ids: list[int] = [BOS]
-    for index, message in enumerate(messages):
+    for message in messages:
         role = message.get("role", "user")
         content = message.get("content") or ""
-        if isinstance(content, list):  # OpenAI content-parts form
-            content = "".join(
-                part.get("text", "") for part in content if isinstance(part, dict)
-            )
         if role == "system":
             ids += TOKENIZER.encode(content).ids
-        elif role == "user":
-            ids += [USER] + TOKENIZER.encode(content).ids
         elif role == "assistant":
             ids += [ASSISTANT] + TOKENIZER.encode(content).ids + [EOS]
-        else:  # tool/other roles: treat as user context
+        else:
             ids += [USER] + TOKENIZER.encode(content).ids
     ids += [ASSISTANT]
     if not think:
         ids += TOKENIZER.encode(THINK_END).ids
     return ids
+
+
+# Tolerant DSML tool-call parser. DeepSeek's official parser is strict
+# ("well-formatted output only" - it raises on the imperfect closing tags
+# the model occasionally emits, e.g. `</｜DSML｜inv>`). We key off the
+# opening tags and the parameter blocks instead, so a botched close does
+# not lose the call. `｜` here is U+FF5C (fullwidth vertical bar).
+_DSML_BLOCK = re.compile(r"<｜DSML｜tool_calls>(.*?)</｜DSML｜tool_calls>", re.S)
+_DSML_BLOCK_OPEN = re.compile(r"<｜DSML｜tool_calls>(.*)$", re.S)
+_DSML_INVOKE = re.compile(r'<｜DSML｜invoke\s+name="([^"]+)"\s*>', re.S)
+_DSML_PARAM = re.compile(
+    r'<｜DSML｜parameter\s+name="([^"]+)"\s+string="(true|false)"\s*>(.*?)</｜DSML｜parameter>',
+    re.S,
+)
+
+
+def _parse_dsml_tool_calls(block: str) -> list[dict]:
+    """Extract OpenAI-format tool calls from the inside of a DSML
+    tool_calls block. Each invoke's parameters run from its opening tag to
+    the next invoke (or the end), so a malformed invoke close is ignored."""
+    calls: list[dict] = []
+    invokes = list(_DSML_INVOKE.finditer(block))
+    for order, match in enumerate(invokes):
+        name = match.group(1)
+        start = match.end()
+        end = invokes[order + 1].start() if order + 1 < len(invokes) else len(block)
+        arguments: dict = {}
+        for param in _DSML_PARAM.finditer(block[start:end]):
+            key, is_string, raw = param.group(1), param.group(2), param.group(3)
+            if is_string == "true":
+                arguments[key] = raw
+            else:
+                try:
+                    arguments[key] = json.loads(raw.strip())
+                except (ValueError, TypeError):
+                    arguments[key] = raw.strip()
+        calls.append({
+            "type": "function",
+            "function": {"name": name, "arguments": json.dumps(arguments, ensure_ascii=False)},
+        })
+    return calls
+
+
+def parse_completion(text: str, think: bool) -> dict:
+    """Turn the model's completion text into {content, reasoning_content,
+    tool_calls}. Splits the reasoning block, then extracts any DSML tool
+    calls with the tolerant parser above."""
+    reasoning = ""
+    body = text
+    if THINK_END in body:
+        reasoning, body = body.split(THINK_END, 1)
+
+    match = _DSML_BLOCK.search(body) or _DSML_BLOCK_OPEN.search(body)
+    if match:
+        tool_calls = _parse_dsml_tool_calls(match.group(1))
+        if tool_calls:
+            content = body[: match.start()].strip()
+            return {"content": content, "reasoning_content": reasoning.strip(),
+                    "tool_calls": tool_calls}
+    return {"content": body.strip(), "reasoning_content": reasoning.strip(),
+            "tool_calls": []}
 
 
 def engine_stream(token_ids: list[int], max_new: int, temperature: float):
@@ -170,11 +267,12 @@ class Handler(BaseHTTPRequestHandler):
             max_new = max(1, min(1024, max_new))
             temperature = float(request.get("temperature") or 0.0)
             stream = bool(request.get("stream"))
+            tools = request.get("tools") or None
             # "reasoning": false (or "think": false) pre-fills an empty
             # think block: the model answers directly.
             think = request.get("reasoning", request.get("think", True))
             think = think not in (False, "false", "off", "none", 0)
-            prompt_ids = encode_messages(messages, think=think)
+            prompt_ids = build_prompt_ids(messages, tools, think)
         except Exception as error:  # noqa: BLE001
             self._json(400, {"error": {"message": str(error)}})
             return
@@ -183,49 +281,92 @@ class Handler(BaseHTTPRequestHandler):
         created = int(time.time())
 
         with ENGINE_LOCK:
-            if stream:
+            # Tool-calling needs the whole completion before it can be parsed
+            # (a DSML block is only valid complete), so those requests are
+            # always buffered; the result is then delivered as one SSE burst
+            # if the client asked to stream. Plain chat keeps live streaming.
+            if stream and not tools:
                 self._stream_response(
                     completion_id, created, prompt_ids, max_new, temperature, think
                 )
             else:
                 self._full_response(
-                    completion_id, created, prompt_ids, max_new, temperature, think
+                    completion_id, created, prompt_ids, max_new, temperature,
+                    think, stream=stream,
                 )
 
     # --- non-streaming -----------------------------------------------------
 
-    def _full_response(self, completion_id, created, prompt_ids, max_new, temperature, think=True):
-        think_end_id = TOKENIZER.token_to_id(THINK_END)
+    def _full_response(self, completion_id, created, prompt_ids, max_new,
+                       temperature, think=True, stream=False):
         generated: list[int] = []
         for token_id in engine_stream(prompt_ids, max_new, temperature):
             if token_id == EOS:
                 break
-            # With the empty think block pre-filled the model occasionally
-            # re-emits </think> and restarts the answer: cut there.
-            if not think and token_id == think_end_id:
-                break
             generated.append(token_id)
         text = TOKENIZER.decode(generated)
-        if THINK_END in text:
-            reasoning, answer = text.rsplit(THINK_END, 1)
-        else:
-            reasoning, answer = None, text
-        finish = "stop" if len(generated) < max_new else "length"
-        message = {"role": "assistant", "content": answer.strip()}
-        if reasoning is not None:
-            message["reasoning_content"] = reasoning.strip()
-        self._json(200, {
+        parsed = parse_completion(text, think)
+        tool_calls = parsed["tool_calls"]
+        finish = "tool_calls" if tool_calls else (
+            "stop" if len(generated) < max_new else "length")
+
+        message: dict = {"role": "assistant"}
+        # OpenAI convention: content is null when the turn is only tool calls.
+        message["content"] = None if tool_calls else parsed["content"]
+        if parsed["reasoning_content"]:
+            message["reasoning_content"] = parsed["reasoning_content"]
+        if tool_calls:
+            for index, call in enumerate(tool_calls):
+                call.setdefault("id", f"call_{uuid.uuid4().hex[:20]}")
+                call.setdefault("type", "function")
+                call["index"] = index
+            message["tool_calls"] = tool_calls
+
+        usage = {
+            "prompt_tokens": len(prompt_ids),
+            "completion_tokens": len(generated),
+            "total_tokens": len(prompt_ids) + len(generated),
+        }
+        if not stream:
+            self._json(200, {
+                "id": completion_id,
+                "object": "chat.completion",
+                "created": created,
+                "model": MODEL_ID,
+                "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+                "usage": usage,
+            })
+            return
+        # Buffered result delivered as a single SSE burst (tool-calling path).
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        try:
+            self._sse(self._chunk(completion_id, created, {"role": "assistant"}))
+            delta: dict = {}
+            if message.get("reasoning_content"):
+                delta["reasoning_content"] = message["reasoning_content"]
+            if message.get("content"):
+                delta["content"] = message["content"]
+            if message.get("tool_calls"):
+                delta["tool_calls"] = message["tool_calls"]
+            self._sse(self._chunk(completion_id, created, delta))
+            self._sse(self._chunk(completion_id, created, {}, finish))
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    def _chunk(self, completion_id, created, delta, finish=None):
+        return {
             "id": completion_id,
-            "object": "chat.completion",
+            "object": "chat.completion.chunk",
             "created": created,
             "model": MODEL_ID,
-            "choices": [{"index": 0, "message": message, "finish_reason": finish}],
-            "usage": {
-                "prompt_tokens": len(prompt_ids),
-                "completion_tokens": len(generated),
-                "total_tokens": len(prompt_ids) + len(generated),
-            },
-        })
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+        }
 
     # --- streaming (SSE) ----------------------------------------------------
 
